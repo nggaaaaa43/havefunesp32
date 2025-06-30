@@ -1,6 +1,10 @@
 #include <SPI.h>
 #include <MFRC522.h>
 #include <EEPROM.h>
+#include "esp_bt.h"
+#include "esp_bt_main.h"
+#include "esp_bt_device.h"
+#include "esp_gap_bt_api.h"
 #include <BluetoothSerial.h>
 
 #define SS_PIN 5
@@ -34,6 +38,16 @@ String currentUsername = "";
 unsigned long timeLog = 0;
 const unsigned long timeoutLog = 60000;
 
+void hideBluetoothDevice() {
+  esp_bluedroid_status_t btStatus = esp_bluedroid_get_status();
+  if (btStatus == ESP_BLUEDROID_STATUS_ENABLED) {
+    esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
+    Serial.println("🔒 Bluetooth disembunyikan dari publik.");
+  } else {
+    Serial.println("⚠️ Bluetooth belum aktif, tidak bisa disembunyikan.");
+  }
+}
+
 void resetAllUsers() {
   for (int i = USER_BASE_ADDR; i < USER_BASE_ADDR + (MAX_USERS * USER_RECORD_SIZE); i++) {
     EEPROM.write(i, 0xFF);
@@ -46,15 +60,12 @@ void injectUser(const char* username, const char* password, char role) {
   for (int i = 0; i < MAX_USERS; i++) {
     int base = USER_BASE_ADDR + i * USER_RECORD_SIZE;
     if (EEPROM.read(base) == 0xFF) {
-      // Simpan username
       for (int j = 0; j < USERNAME_LEN; j++) {
         EEPROM.write(base + j, j < strlen(username) ? username[j] : 0);
       }
-      // Simpan password
       for (int j = 0; j < PASSWORD_LEN; j++) {
         EEPROM.write(base + USERNAME_LEN + j, j < strlen(password) ? password[j] : 0);
       }
-      // Simpan role
       EEPROM.write(base + USERNAME_LEN + PASSWORD_LEN, role);
       EEPROM.commit();
       Serial.println("🛠️ Akun telah di-inject ke EEPROM.");
@@ -73,10 +84,11 @@ void setup() {
   EEPROM.begin(512);
 
   SerialBT.begin("RANGGA_MICROCONTROLLER", true);
+  delay(1000);
+  hideBluetoothDevice();
 
   /*
-  resetAllUsers(); // ← HAPUS setelah berhasil agar tidak terus menghapus
-  // Cek isi EEPROM slot akun
+  resetAllUsers();
   Serial.println("📦 Cek EEPROM slot akun:");
   for (int i = 0; i < MAX_USERS; i++) {
     int base = USER_BASE_ADDR + i * USER_RECORD_SIZE;
@@ -86,11 +98,12 @@ void setup() {
     Serial.print(": ");
     Serial.println(val == 0xFF ? "Kosong" : "Terisi");
   }
-  // HANYA UNTUK SEKALI PAKAI
   injectUser("admin", "admin123", 'A');
   Serial.println("🟢 Sistem aktif. Silakan login dengan format: login username=password");
   */
 }
+
+// (Selanjutnya tidak diubah)
 
 void loop() {
   if (SerialBT.available()) {
